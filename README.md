@@ -81,20 +81,26 @@ asUUID(row.id);        // trusted cast for DB values
 │       └── uuid.ts             # Branded UUID type
 │
 └── src/
-    ├── model/                  # Internal domain schemas
+    ├── model/
+    │   ├── journey.ts          # Journey domain schema + step/status enums
+    │   ├── event-record.ts     # Shared schema for all 9 saga event tables
+    │   └── ...                 # Student, JourneyInitiated, Event schemas
     ├── wire/
     │   ├── in/                 # Inbound contracts (HTTP body, received message)
     │   └── out/                # Outbound contracts (HTTP response, published message)
     ├── adapters/               # Translation between wire and model
-    ├── logic/                  # Pure domain functions
-    ├── controllers/            # Business rule orchestration
+    ├── logic/
+    │   ├── event-record.ts     # buildEventRecord — converts Kafka Event → EventRecordInput
+    │   ├── journey.ts          # buildJourney, buildJourneyStepUpdate, buildJourneyStatusUpdate
+    │   └── ...                 # Other pure domain functions
+    ├── controllers/            # Business rule orchestration (one file per saga step)
     ├── db/
     │   ├── wire/               # TypeORM entities (database format)
     │   ├── migrations/         # Database migrations
     │   └── data-source.ts      # TypeORM configuration
     └── diplomat/               # Bridge between lib and application
         ├── http-server/        # Inbound HTTP routes
-        └── consumer/           # Received message handlers
+        └── consumer/           # Registers all 9 Kafka consumers
 ```
 
 ---
@@ -215,10 +221,73 @@ JOURNEY_INITIATED ──► DIAGNOSTIC_TRIGGERED ──► DIAGNOSTIC_COMPLETED
 
 ### Kafka Message Contract
 
-Each message carries the `eventId` of the previous event and the `journeyId` of the session. The consumer fetches all necessary data from the database using these pointers — the message is minimal, the database is the source of truth.
+Each message carries only two fields. The consumer uses them to look up everything it needs from the database — the message is minimal, the database is the source of truth.
 
 ```json
 { "eventId": "<previous-event-id>", "journeyId": "<journey-id>" }
+```
+
+`eventId` always refers to the `id` of the record inserted in the **previous step**. When the next consumer inserts its own record, it reuses that same `id` as its primary key — creating an immutable chain without any foreign key column.
+
+### Virtual Reference — Scalable Event Chain
+
+Each saga event table has only three columns: `id`, `journey_id`, `created_at`. There is no `previous_event_id` column and no FK constraint. Instead, the `id` of each record is set to the `id` of the record from the previous step.
+
+```
+journey_initiated.id  ──set as──►  diagnostic_triggered.id
+diagnostic_triggered.id  ──set as──►  diagnostic_completed.id
+...and so on through all 9 steps
+```
+
+This means a new step can be inserted anywhere in the chain without modifying existing tables or records.
+
+### Controller Pattern
+
+Every consumer controller follows the same four-step pattern:
+
+```typescript
+export const diagnosticTriggered = asyncFn(Event, async (event) => {
+  // 1. Validate the previous event exists
+  const previous = await diagnosticTriggeredDb.findById(event.eventId);
+  if (!previous) throw new NotFoundError('...');
+
+  // 2. Idempotency check — already processed?
+  const existing = await diagnosticCompletedDb.findById(event.eventId);
+  if (existing) {
+    await sideEffect(buildEvent({ journeyId: existing.journeyId, eventId: existing.id }));
+    return;
+  }
+
+  // 3. Insert current event record + advance journey step
+  const current = await diagnosticCompletedDb.insert(buildEventRecord(event));
+  await journeyDb.updateStep(buildJourneyStepUpdate({ id: previous.journeyId, currentStep: 'DIAGNOSTIC_COMPLETED' }));
+
+  // 4. Publish next event
+  await sideEffect(buildEvent({ journeyId: current.journeyId, eventId: current.id }));
+});
+```
+
+| Step | Purpose |
+|---|---|
+| `findById(event.eventId)` on **previous** table | Validates the incoming event refers to a real record |
+| `findById(event.eventId)` on **current** table | Idempotency — if already processed, re-publishes and exits |
+| `insert(buildEventRecord(event))` + `updateStep` | Persists the new step and advances the journey state |
+| `publish` via `sideEffect` | Triggers the next step in the saga |
+
+The last step (`progressMilestoneReached`) has no `sideEffect` — it closes the saga by setting `status: 'completed'`.
+
+### Registered Consumers
+
+```typescript
+subscribe('journeyInitiated',          handle(journeyStarted));
+subscribe('diagnosticTriggered',       handle(diagnosticTriggered));
+subscribe('diagnosticCompleted',       handle(diagnosticCompleted));
+subscribe('analysisStarted',           handle(analysisStarted));
+subscribe('analysisFinished',          handle(analysisFinished));
+subscribe('curriculumGenerated',       handle(curriculumGenerated));
+subscribe('contentDispatched',         handle(contentDispatched));
+subscribe('studentEngagementReceived', handle(studentEngagementReceived));
+subscribe('progressMilestoneReached',  handle(progressMilestoneReached));
 ```
 
 ---
@@ -286,20 +355,61 @@ yarn test          # all tests
 
 Cover every `logic/` and `adapters/` function in isolation. No mocks, no infrastructure.
 
+```
+tests/unit/
+├── event/             # buildEvent, toModel
+├── eventRecord/       # buildEventRecord
+├── journey/           # buildJourney, buildJourneyStepUpdate, buildJourneyStatusUpdate
+├── journeyInitiated/  # buildJourneyInitiated
+├── student/           # buildStudent
+├── diagnosticTriggered/adapters.test.ts
+├── diagnosticCompleted/adapters.test.ts
+├── analysisStarted/adapters.test.ts
+├── analysisFinished/adapters.test.ts
+├── curriculumGenerated/adapters.test.ts
+├── contentDispatched/adapters.test.ts
+├── studentEngagementReceived/adapters.test.ts
+├── progressMilestoneReached/adapters.test.ts
+└── journeyCompleted/adapters.test.ts
+```
+
 ### Integration tests
 
-Cover the full request lifecycle end-to-end with no external dependencies:
+Cover the full lifecycle end-to-end with no external dependencies:
 - Real HTTP injection via Fastify `inject` (no server needed)
 - SQLite in-memory database (no Postgres needed)
 - Kafka producer mocked — verifies topic and payload correctness
 
+**HTTP entry point:**
 ```
 POST /journeys
-  → validate input (StartJourneyWireIn)
+  → validate input
   → insert Student, Journey, JourneyInitiated in DB
   → publish('journeyInitiated', { journeyId, eventId })
   → return Journey (201)
 ```
+
+**One test file per saga step** — each verifies all four guarantees of its consumer:
+
+```
+tests/integration/
+├── journey.test.ts                    # POST /journeys HTTP flow
+├── journey-initiated.test.ts          # journeyStarted consumer
+├── diagnostic-triggered.test.ts       # diagnosticTriggered consumer
+├── diagnostic-completed.test.ts       # diagnosticCompleted consumer
+├── analysis-started.test.ts           # analysisStarted consumer
+├── analysis-finished.test.ts          # analysisFinished consumer
+├── curriculum-generated.test.ts       # curriculumGenerated consumer
+├── content-dispatched.test.ts         # contentDispatched consumer
+├── student-engagement-received.test.ts
+└── progress-milestone-reached.test.ts
+```
+
+Each integration test file verifies:
+1. The new event record is inserted with `id = previous.id`
+2. `journey.current_step` is advanced to the correct step
+3. The correct Kafka topic is published with the right payload
+4. A second identical call is idempotent — no duplicate record, publish is re-issued
 
 ---
 
