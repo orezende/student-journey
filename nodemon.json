@@ -1,0 +1,6 @@
+{
+  "watch": ["src", "lib"],
+  "ext": "ts",
+  "exec": "tsx src/server.ts",
+  "delay": 500
+}

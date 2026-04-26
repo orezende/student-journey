@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(yarn init *)",
+      "Bash(yarn add *)",
+      "Bash(timeout 5 yarn dev)",
+      "Bash(yarn build *)",
+      "Bash(gh auth *)",
+      "Bash(gh repo *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"feat: diplomat architecture reference implementation\")",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"docs: add hands-on exercise to README\")",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"docs: add implementation guide for new entities and fields to CLAUDE.md\")",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"feat: abstract typeorm behind lib/db\")",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"feat: add Dockerfile and docker-compose\")",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"feat: add kafka to docker-compose\")",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"fix: use bitnami/kafka:latest instead of non-existent 3.7 tag\")",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"feat: add kafka-ui to docker-compose\")",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"feat: add loki, promtail and grafana for log observability\")",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"feat: add kafka topic provisioning script\")",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"fix: read topics from kafka_topics key in poc-nubank-style.json\")",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"feat: resolve kafka topics and http endpoints by name from poc-nubank-style.json\")",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"feat: add structured pino logging to all lib communication layers\")",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"feat: add all http methods to lib/http-server and lib/http-client\")",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"chore: add .env.example\")",
+      "Bash(git -c user.name=\"Joao Vitor\" -c user.email=\"joaorabello99@gmail.com\" commit -m \"fix: replace bitnami/kafka with apache/kafka:3.7.0\")",
+      "Bash(git commit -m ' *)",
+      "Bash(git commit *)",
+      "Bash(yarn migration:generate *)",
+      "Bash(python3 -m json.tool)"
+    ]
+  }
+}

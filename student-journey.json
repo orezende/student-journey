@@ -1,0 +1,9 @@
+{
+  "kafka_topics": {
+    "journeyInitiated" : {
+      "topic": "JOURNEY_INITIATED",
+      "direction": "both"
+    }
+  },
+  "http_mapped": {}
+}
