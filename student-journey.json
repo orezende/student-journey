@@ -1,7 +1,39 @@
 {
   "kafka_topics": {
-    "journeyInitiated" : {
+    "journeyInitiated": {
       "topic": "JOURNEY_INITIATED",
+      "direction": "both"
+    },
+    "diagnosticTriggered": {
+      "topic": "DIAGNOSTIC_TRIGGERED",
+      "direction": "both"
+    },
+    "diagnosticCompleted": {
+      "topic": "DIAGNOSTIC_COMPLETED",
+      "direction": "both"
+    },
+    "analysisStarted": {
+      "topic": "ANALYSIS_STARTED",
+      "direction": "both"
+    },
+    "analysisFinished": {
+      "topic": "ANALYSIS_FINISHED",
+      "direction": "both"
+    },
+    "curriculumGenerated": {
+      "topic": "CURRICULUM_GENERATED",
+      "direction": "both"
+    },
+    "contentDispatched": {
+      "topic": "CONTENT_DISPATCHED",
+      "direction": "both"
+    },
+    "studentEngagementReceived": {
+      "topic": "STUDENT_ENGAGEMENT_RECEIVED",
+      "direction": "both"
+    },
+    "progressMilestoneReached": {
+      "topic": "PROGRESS_MILESTONE_REACHED",
       "direction": "both"
     }
   },

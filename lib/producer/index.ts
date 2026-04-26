@@ -27,3 +27,10 @@ export async function publish<T extends { cid?: string; eventId?: string; journe
     messages: [{ value: JSON.stringify({ ...message, cid }) }],
   });
 }
+
+export async function publishRaw(topic: string, message: unknown): Promise<void> {
+  await producer.send({
+    topic,
+    messages: [{ value: JSON.stringify(message) }],
+  });
+}

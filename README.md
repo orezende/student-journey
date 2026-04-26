@@ -292,6 +292,146 @@ subscribe('progressMilestoneReached',  handle(progressMilestoneReached));
 
 ---
 
+## Resilience
+
+### Consumer error handling
+
+Every message processed by `lib/consumer` is wrapped in a try/catch. An error thrown by the handler — whether a `NotFoundError`, a transient DB failure, or a validation error — never crashes the consumer. The Kafka `eachMessage` loop keeps running regardless.
+
+### Retry with exponential backoff
+
+Before giving up, the consumer retries the handler up to **3 times** with exponential backoff:
+
+```
+attempt 1 → wait 500ms → attempt 2 → wait 1s → attempt 3 → wait 2s → give up
+```
+
+This covers transient failures (momentary DB unavailability, network hiccup) without any manual intervention.
+
+### Dead Letter Queue (DLQ)
+
+If all retries are exhausted, the original message is published to the `student-journey-dlq` Kafka topic with full context for debugging:
+
+```json
+{
+  "originalTopic": "DIAGNOSTIC_TRIGGERED",
+  "name": "diagnosticTriggered",
+  "payload": { "eventId": "...", "journeyId": "..." },
+  "error": "DiagnosticTriggered not found for eventId: ...",
+  "failedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+The consumer moves on — no message blocks the pipeline, and nothing is silently lost.
+
+### Kafka client retry
+
+The Kafka client is configured with explicit retry settings to handle broker unavailability at connection time:
+
+```typescript
+retry: { initialRetryTime: 300, retries: 10 }
+```
+
+### Summary
+
+| Failure scenario | Behavior |
+|---|---|
+| Handler throws (any error) | Consumer stays alive, retries up to 3× |
+| Transient DB failure | Resolved by retry backoff |
+| Persistent failure after retries | Message routed to `student-journey-dlq` |
+| Broker unavailable at startup | Kafka client retries 10× before failing |
+| Graceful shutdown (`SIGTERM`) | HTTP, producer, and DB closed orderly |
+
+---
+
+## Observability
+
+### Log pipeline
+
+Logs are emitted by the application as structured JSON (via `pino`) and flow through the following pipeline:
+
+```
+app container (stdout)
+       │
+       ▼
+Promtail  ← scrapes Docker socket every 5s, labels logs with container name
+       │
+       ▼
+Loki  ← stores and indexes log streams
+       │
+       ▼
+Grafana  ← queries Loki via LogQL, renders results
+```
+
+> **Important:** Promtail scrapes Docker containers only. `yarn dev` runs outside Docker — its logs are not collected. Use `docker compose up -d` for full observability.
+
+### Structured log fields
+
+Every log line emitted by the application is a JSON object. The fields are:
+
+| Field | Source | Description |
+|---|---|---|
+| `level` | pino | Log level: `info`, `warn`, `error` |
+| `time` | pino | ISO timestamp |
+| `name` | pino | Logger name — matches the consumer group (`diagnosticTriggered`, etc.) or `student-journey` for the producer |
+| `msg` | pino | Human-readable message |
+| `topic` | consumer/producer | Kafka topic name (e.g. `DIAGNOSTIC_TRIGGERED`) |
+| `eventId` | consumer/producer | ID of the event being processed |
+| `cid` | consumer/producer | Correlation ID — traces a message across all saga steps |
+| `err` | consumer | Error object, present only on error logs |
+| `payload` | consumer | Original Kafka payload, present on DLQ error logs |
+
+### Correlation ID (`cid`)
+
+Each Kafka message carries a `cid` field that propagates through the entire saga. The format is `<uuid-prefix>:<hop-count>`:
+
+```
+a3f2b1c0:0  →  a3f2b1c0:1  →  a3f2b1c0:2  →  ...  →  a3f2b1c0:8
+```
+
+The hop counter increments at every publish. A single `POST /journeys` that completes the full saga produces logs with `cid` values from `:0` through `:8` — one per step. Filtering by the UUID prefix in Grafana shows the entire lifecycle of one journey.
+
+### Querying logs in Grafana
+
+Navigate to `http://localhost:4000` → **Explore** → datasource **Loki**.
+
+**All app logs**
+```logql
+{container="student-journey-app-1"}
+```
+
+**Filter by keyword**
+```logql
+{container="student-journey-app-1"} |= "consumer: message received"
+```
+
+**Errors only**
+```logql
+{container="student-journey-app-1"} |= "ERROR"
+```
+
+**Parse JSON and filter by field**
+```logql
+{container="student-journey-app-1"} | json | topic = "DIAGNOSTIC_TRIGGERED"
+```
+
+**Trace a full journey by correlation ID**
+```logql
+{container="student-journey-app-1"} | json | cid =~ "a3f2b1c0:.*"
+```
+
+**Dead Letter Queue — failed messages**
+```logql
+{container="student-journey-app-1"} |= "sending to DLQ"
+```
+
+**Consumer that failed to start**
+```logql
+{container="student-journey-app-1"} |= "consumer: failed to start"
+```
+
+---
+
 ## How to Run
 
 ### Prerequisites
@@ -313,7 +453,8 @@ docker compose up -d
 | **API** | http://localhost:3000 | Main application |
 | **Kafka UI** | http://localhost:8080 | Kafka web interface — topics, messages, consumer groups |
 | **Grafana** | http://localhost:4000 | Observability dashboards — logs via Loki |
-| **PostgreSQL** | localhost:5432 | Database — user `postgres`, password `postgres`, db `poc` |
+| **PostgreSQL** | localhost:5432 | Database — user `postgres`, password `postgres`, db `student_journey` |
+
 
 ### Local Setup
 
