@@ -35,3 +35,13 @@ export const JourneyRecord = createSchema({
   currentStep: field.literal(...JOURNEY_STEPS),
   status: field.literal(...JOURNEY_STATUSES),
 });
+
+export const JourneyStepUpdate = createSchema({
+  id: field.uuid(),
+  currentStep: field.literal(...JOURNEY_STEPS),
+});
+
+export const JourneyStatusUpdate = createSchema({
+  id: field.uuid(),
+  status: field.literal(...JOURNEY_STATUSES),
+});
