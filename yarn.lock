@@ -218,10 +218,15 @@
     reflect-metadata "^0.2.2"
     typeorm "^0.3.28"
 
+"@student-journey/docker@file:/Users/joaovitor/Dev/student-journey/lib/docker":
+  version "1.0.0"
+  resolved "file:lib/docker"
+
 "@student-journey/http@file:/Users/joaovitor/Dev/student-journey/lib/http":
   version "1.0.0"
   resolved "file:lib/http"
   dependencies:
+    "@scalar/fastify-api-reference" "^1.25.72"
     fastify "^5.8.5"
 
 "@student-journey/messaging@file:/Users/joaovitor/Dev/student-journey/lib/messaging":

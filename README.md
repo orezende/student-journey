@@ -125,6 +125,7 @@ The only layer that knows and imports external frameworks (Fastify, Kafka, TypeO
 | `lib/messaging` | Message broker (KafkaJS) | `publish`, `subscribe`, `ensureTopics` |
 | `lib/observability` | Logging (pino) | `logger` |
 | `lib/testing` | Test utilities (vitest) | `test`, `describe`, `it`, `expect`, `createTestDataSource` |
+| `lib/docker` | Docker socket API | `startContainer`, `stopContainer` |
 | `lib/quality` | Linting, formatting, git hooks | `base()`, `boundaries()`, `setup.ts` |
 
 ---
@@ -427,7 +428,8 @@ docker compose up -d
 
 | Service | URL | Description |
 |---|---|---|
-| **API** | http://localhost:3000 | Main application |
+| **Dashboard** | http://localhost:3000 | Service overview with start/stop controls |
+| **API Reference** | http://localhost:3000/docs | Scalar UI — interactive docs for all endpoints |
 | **Kafka UI** | http://localhost:8080 | Topics, messages, consumer groups |
 | **Grafana** | http://localhost:4000 | Logs via Loki |
 | **PostgreSQL** | localhost:5432 | user `postgres`, password `postgres`, db `student_journey` |
@@ -451,16 +453,20 @@ npm run migration:revert               # revert the last migration
 
 ### Endpoints
 
-```
-GET  /health
-→ { status: 'ok' }
-
-POST /journeys
-Body: { "name": "Alice", "email": "alice@example.com" }
-→ 201: { "id": "...", "studentId": "...", "currentStep": "JOURNEY_INITIATED", "status": "active", "createdAt": "..." }
-```
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/` | Service dashboard — status and start/stop controls for all containers |
+| `GET` | `/docs` | Scalar API Reference — interactive documentation |
+| `GET` | `/health` | Health check — returns JSON with DB and Kafka status |
+| `POST` | `/journeys` | Start a new student journey |
+| `POST` | `/services/start` | Start a Docker container by name (dashboard internal) |
+| `POST` | `/services/stop` | Stop a Docker container by name (dashboard internal) |
 
 ```bash
+# Health check
+curl -s http://localhost:3000/health
+
+# Start a journey
 curl -s -X POST http://localhost:3000/journeys \
   -H "Content-Type: application/json" \
   -d '{"name": "Alice", "email": "alice@example.com"}' | jq

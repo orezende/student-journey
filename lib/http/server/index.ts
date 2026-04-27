@@ -50,6 +50,12 @@ export function get(path: string, handler: () => Promise<unknown>): void {
   app.get(path, async () => handler());
 }
 
+export function html(path: string, handler: () => Promise<string>): void {
+  app.get(path, async (_request, reply) => {
+    reply.type('text/html; charset=utf-8').send(await handler());
+  });
+}
+
 export function post<TBody>(path: string, handler: Handler<TBody>): void {
   app.post<{ Body: TBody }>(path, async (request, reply) => {
     reply.status(201).send(await handler(request.body as TBody));
