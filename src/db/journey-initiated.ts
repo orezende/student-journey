@@ -19,6 +19,13 @@ export async function findById(
   return row ? fromDbWire(row) : null;
 }
 
+export async function findByJourneyId(
+  journeyId: UUID,
+): Promise<ReturnType<typeof JourneyInitiated.parse> | null> {
+  const row = await repo().findOne({ where: { journey_id: journeyId } });
+  return row ? fromDbWire(row) : null;
+}
+
 export async function findAll(): Promise<ReturnType<typeof JourneyInitiated.parse>[]> {
   const rows = await repo().find();
   return rows.map(fromDbWire);

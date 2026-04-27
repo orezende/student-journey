@@ -75,4 +75,13 @@ export const field = {
       return value as T;
     };
   },
+
+  number(): FieldParser<number> {
+    return (value, name) => {
+      if (typeof value !== 'number' || isNaN(value)) {
+        throw new TypeError(`Field "${name}" must be a number, got ${typeof value}`);
+      }
+      return value;
+    };
+  },
 };
