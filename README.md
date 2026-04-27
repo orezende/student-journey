@@ -4,6 +4,71 @@ Implementation of **MindStream**, an EDA-based adaptive learning platform built 
 
 ---
 
+## How to Run
+
+### Prerequisites
+
+- Node.js 24+
+- Docker
+
+### Start with Docker
+
+```bash
+docker compose up -d
+```
+
+### Available Services
+
+| Service | URL | Description |
+|---|---|---|
+| **Dashboard** | http://localhost:3000 | Service overview with start/stop controls |
+| **Architecture Overview** | http://localhost:3000/overview | Visual diagrams: state machine, data flow, layers, infrastructure |
+| **API Reference** | http://localhost:3000/docs | Scalar UI — interactive docs for all endpoints |
+| **Kafka UI** | http://localhost:8080 | Topics, messages, consumer groups |
+| **Grafana** | http://localhost:4000 | Logs via Loki |
+| **PostgreSQL** | localhost:5432 | user `postgres`, password `postgres`, db `student_journey` |
+
+### Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/` | Service dashboard — status and start/stop controls for all containers |
+| `GET` | `/overview` | Architecture overview — visual diagrams of state machine, data flow and infrastructure |
+| `GET` | `/docs` | Scalar API Reference — interactive documentation |
+| `GET` | `/health` | Health check — returns JSON with DB and Kafka status |
+| `POST` | `/journeys` | Start a new student journey |
+| `POST` | `/services/start` | Start a Docker container by name (dashboard internal) |
+| `POST` | `/services/stop` | Stop a Docker container by name (dashboard internal) |
+
+```bash
+# Health check
+curl -s http://localhost:3000/health
+
+# Start a journey
+curl -s -X POST http://localhost:3000/journeys \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Alice", "email": "alice@example.com"}' | jq
+```
+
+### Local Setup
+
+```bash
+npm install
+npm run dev          # development with hot reload
+npm run build        # lint + compile to dist/
+npm start            # run compiled build
+```
+
+### Migrations
+
+```bash
+npm run migration:generate -- <name>   # generate a new migration
+npm run migration:run                  # apply pending migrations
+npm run migration:revert               # revert the last migration
+```
+
+---
+
 ## The Problem This Architecture Solves
 
 In conventional applications, business logic, database access, HTTP calls, and framework code are often mixed together. This creates systems that are hard to test, hard to evolve, and where a change in one place breaks another unexpectedly.
@@ -408,69 +473,6 @@ After that, hooks run automatically:
 | `pre-push` | `git push` | `npm run build` |
 
 There is no `--no-verify` bypass documented here intentionally.
-
----
-
-## How to Run
-
-### Prerequisites
-
-- Node.js 24+
-- Docker
-
-### Start with Docker
-
-```bash
-docker compose up -d
-```
-
-### Available Services
-
-| Service | URL | Description |
-|---|---|---|
-| **Dashboard** | http://localhost:3000 | Service overview with start/stop controls |
-| **API Reference** | http://localhost:3000/docs | Scalar UI — interactive docs for all endpoints |
-| **Kafka UI** | http://localhost:8080 | Topics, messages, consumer groups |
-| **Grafana** | http://localhost:4000 | Logs via Loki |
-| **PostgreSQL** | localhost:5432 | user `postgres`, password `postgres`, db `student_journey` |
-
-### Local Setup
-
-```bash
-npm install
-npm run dev          # development with hot reload
-npm run build        # lint + compile to dist/
-npm start            # run compiled build
-```
-
-### Migrations
-
-```bash
-npm run migration:generate -- <name>   # generate a new migration
-npm run migration:run                  # apply pending migrations
-npm run migration:revert               # revert the last migration
-```
-
-### Endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/` | Service dashboard — status and start/stop controls for all containers |
-| `GET` | `/docs` | Scalar API Reference — interactive documentation |
-| `GET` | `/health` | Health check — returns JSON with DB and Kafka status |
-| `POST` | `/journeys` | Start a new student journey |
-| `POST` | `/services/start` | Start a Docker container by name (dashboard internal) |
-| `POST` | `/services/stop` | Stop a Docker container by name (dashboard internal) |
-
-```bash
-# Health check
-curl -s http://localhost:3000/health
-
-# Start a journey
-curl -s -X POST http://localhost:3000/journeys \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Alice", "email": "alice@example.com"}' | jq
-```
 
 ---
 

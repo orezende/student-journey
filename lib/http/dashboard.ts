@@ -113,7 +113,10 @@ export function renderDashboard(services: Service[]): string {
       <h1>Student Journey</h1>
       <p>Service dashboard</p>
     </div>
-    <a class="docs-link" href="/docs">API Reference →</a>
+    <div style="display:flex;gap:8px;">
+      <a class="docs-link" href="/overview">Overview →</a>
+      <a class="docs-link" href="/docs">API Reference →</a>
+    </div>
   </header>
   <div class="grid">
 ${cards}

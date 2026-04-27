@@ -1,6 +1,7 @@
 import { get, html, post } from '../lib/http/server/index';
 import { renderDashboard } from '../lib/http/dashboard';
 import { renderApiDocs } from '../lib/http/docs';
+import { renderOverview } from '../lib/http/overview';
 import { setupRoutes } from './diplomat/http-server/index';
 import { checkHealth } from './health/index';
 import { startContainer, stopContainer } from '../lib/docker/index';
@@ -10,6 +11,7 @@ export function buildApp(): void {
   get('/health', () => checkHealth());
 
   html('/docs', async () => renderApiDocs(openApiSpec));
+  html('/overview', async () => renderOverview());
 
   html('/', async () => {
     const health = await checkHealth();
