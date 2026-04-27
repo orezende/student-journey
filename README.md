@@ -37,6 +37,8 @@ docker compose up -d
 | `GET` | `/docs` | Scalar API Reference — interactive documentation |
 | `GET` | `/health` | Health check — returns JSON with DB and Kafka status |
 | `POST` | `/journeys` | Start a new student journey |
+| `POST` | `/journeys/republish` | Recover stuck journeys — inserts missing events and re-triggers the saga |
+| `GET` | `/timeline` | All students with their journeys and events ordered by date |
 | `POST` | `/services/start` | Start a Docker container by name (dashboard internal) |
 | `POST` | `/services/stop` | Stop a Docker container by name (dashboard internal) |
 
@@ -48,6 +50,12 @@ curl -s http://localhost:3000/health
 curl -s -X POST http://localhost:3000/journeys \
   -H "Content-Type: application/json" \
   -d '{"name": "Alice", "email": "alice@example.com"}' | jq
+
+# Recover stuck journeys
+curl -s -X POST http://localhost:3000/journeys/republish | jq
+
+# Full event timeline
+curl -s http://localhost:3000/timeline | jq
 ```
 
 ### Local Setup
