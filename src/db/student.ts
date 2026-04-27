@@ -15,3 +15,8 @@ export const insert = asyncFn(StudentInput, Student, async (student) => {
   const row = await repo().save(toDbWire(student));
   return fromDbWire(row);
 });
+
+export async function findAll(): Promise<ReturnType<typeof Student.parse>[]> {
+  const rows = await repo().find();
+  return rows.map(fromDbWire);
+}

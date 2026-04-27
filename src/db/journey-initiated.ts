@@ -18,3 +18,8 @@ export async function findById(
   const row = await repo().findOne({ where: { id } });
   return row ? fromDbWire(row) : null;
 }
+
+export async function findAll(): Promise<ReturnType<typeof JourneyInitiated.parse>[]> {
+  const rows = await repo().find();
+  return rows.map(fromDbWire);
+}

@@ -18,3 +18,8 @@ export const updateStep = asyncFn(JourneyStepUpdate, async (input) => {
 export const updateStatus = asyncFn(JourneyStatusUpdate, async (input) => {
   await repo().update({ id: input.id }, { status: input.status });
 });
+
+export async function findAll(): Promise<ReturnType<typeof Journey.parse>[]> {
+  const rows = await repo().find();
+  return rows.map(fromDbWire);
+}
