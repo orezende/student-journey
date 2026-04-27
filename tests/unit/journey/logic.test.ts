@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from '../../../lib/testing';
 import { buildJourney, buildJourneyStepUpdate, buildJourneyStatusUpdate } from '../../../src/logic/journey';
 
 const studentId = '22222222-2222-2222-2222-222222222222';

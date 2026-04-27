@@ -1,0 +1,8 @@
+{
+  "name": "@student-journey/messaging",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "kafkajs": "^2.2.4"
+  }
+}

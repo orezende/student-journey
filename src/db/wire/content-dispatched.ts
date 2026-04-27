@@ -1,17 +1,23 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { defineEntity, column, SchemaDefinition } from '../../../lib/db';
 
-@Entity('content_dispatched')
 export class ContentDispatchedDbWire {
-  @PrimaryGeneratedColumn('uuid')
   id!: string;
-
-  @Column({ name: 'journey_id', type: 'uuid' })
   journey_id!: string;
-
-  @CreateDateColumn({ name: 'created_at' })
   created_at!: Date;
 
   static parse(data: unknown): ContentDispatchedDbWire {
     return Object.assign(new ContentDispatchedDbWire(), data);
   }
 }
+
+export const ContentDispatchedSchema: SchemaDefinition<ContentDispatchedDbWire> = defineEntity(
+  ContentDispatchedDbWire,
+  {
+    tableName: 'content_dispatched',
+    columns: {
+      id: column.primaryUuid(),
+      journey_id: column.uuid(),
+      created_at: column.createdAt(),
+    },
+  },
+);

@@ -1,23 +1,24 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { defineEntity, column, SchemaDefinition } from '../../../lib/db';
 
-@Entity('journeys')
 export class JourneyDbWire {
-  @PrimaryGeneratedColumn('uuid')
   id!: string;
-
-  @Column({ name: 'student_id', type: 'uuid' })
   student_id!: string;
-
-  @Column({ name: 'current_step', type: 'varchar' })
   current_step!: string;
-
-  @Column({ type: 'varchar' })
   status!: string;
-
-  @CreateDateColumn({ name: 'created_at' })
   created_at!: Date;
 
   static parse(data: unknown): JourneyDbWire {
     return Object.assign(new JourneyDbWire(), data);
   }
 }
+
+export const JourneySchema: SchemaDefinition<JourneyDbWire> = defineEntity(JourneyDbWire, {
+  tableName: 'journeys',
+  columns: {
+    id: column.primaryUuid(),
+    student_id: column.uuid(),
+    current_step: column.varchar(),
+    status: column.varchar(),
+    created_at: column.createdAt(),
+  },
+});

@@ -1,20 +1,23 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import { Migration, sql, MigrationRunner } from '../../../lib/db';
 
-export class CreateJourneyCompletedTable1777200080000 implements MigrationInterface {
+export class CreateJourneyCompletedTable1777200080000 extends Migration {
   name = 'CreateJourneyCompletedTable1777200080000';
 
-  public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`
+  async up(runner: MigrationRunner): Promise<void> {
+    await sql(
+      runner,
+      `
       CREATE TABLE "journey_completed" (
         "id" uuid NOT NULL,
         "journey_id" uuid NOT NULL,
         "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
         CONSTRAINT "PK_journey_completed" PRIMARY KEY ("id")
       )
-    `);
+    `,
+    );
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE "journey_completed"`);
+  async down(runner: MigrationRunner): Promise<void> {
+    await sql(runner, `DROP TABLE "journey_completed"`);
   }
 }

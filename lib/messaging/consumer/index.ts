@@ -1,6 +1,6 @@
-import { logger } from '../logger';
+import { logger } from '../../observability/logger';
 import { getKafkaTopic } from '../config';
-import { nextCid } from '../cid';
+import { nextCid } from '../../observability/cid';
 import { kafka } from '../kafka';
 import { publishRaw } from '../producer/index';
 

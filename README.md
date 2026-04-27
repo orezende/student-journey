@@ -71,10 +71,12 @@ asUUID(row.id);        // trusted cast for DB values
 ```
 .
 ├── lib/                        # Technical infrastructure (frameworks and brokers)
-│   ├── errors/                 # Generic error classes
-│   ├── http-server/            # Encapsulates the HTTP server (Fastify)
-│   ├── consumer/               # Encapsulates message consumption (Kafka)
-│   ├── producer/               # Encapsulates message publishing
+│   ├── db/                     # Encapsulates TypeORM (DataSource, migrations, CLI, createTestDataSource)
+│   ├── http/                   # Encapsulates Fastify (get, post, listen, inject)
+│   ├── messaging/              # Encapsulates KafkaJS (producer, consumer, ensureTopics)
+│   ├── observability/          # Encapsulates pino (logger)
+│   ├── testing/                # Encapsulates vitest (test object, createTestDataSource re-export)
+│   ├── quality/                # ESLint + Prettier config + git hooks (tooling-only)
 │   └── types/
 │       ├── schema.ts           # createSchema, field.*
 │       ├── fn.ts               # fn, asyncFn
@@ -103,25 +105,27 @@ asUUID(row.id);        // trusted cast for DB values
         └── consumer/           # Registers all 9 Kafka consumers
 ```
 
+Each `lib/*` directory is an npm workspace package with its own `package.json` declaring only its direct dependencies. No external framework is ever imported directly in `src/`.
+
 ---
 
 ## Layers
 
 ### `lib/` — Technical Infrastructure
 
-The only layer that knows and imports external frameworks (Fastify, Kafka). Everything else in the application is completely agnostic about which technology is being used.
+The only layer that knows and imports external frameworks (Fastify, Kafka, TypeORM, pino). Everything else in the application is completely agnostic about which technology is being used.
 
 **Direct benefit:** swapping Fastify for another framework, or Kafka for another broker, means changing only files inside `lib/` — not a single line in `src/` changes.
 
 | Module | Responsibility | Exposed interface |
 |---|---|---|
-| `lib/errors` | Generic error classes | `NotFoundError`, `ConflictError`, `ValidationError` |
-| `lib/http-server` | HTTP server | `get`, `post`, `listen`, `inject` |
-| `lib/consumer` | Message consumption | `subscribe(name, handler)` |
-| `lib/producer` | Message publishing | `publish(name, message)` |
-| `lib/types/schema` | Runtime validation | `createSchema`, `field.*` |
-| `lib/types/fn` | Validated function wrappers | `fn`, `asyncFn` |
-| `lib/types/uuid` | Branded UUID | `toUUID`, `asUUID` |
+| `lib/types` | Runtime validation + branded types | `createSchema`, `field.*`, `fn`, `asyncFn`, `UUID` |
+| `lib/db` | Database (TypeORM) | `AppDataSource`, `createTestDataSource`, migration CLI |
+| `lib/http` | HTTP server (Fastify) | `get`, `post`, `listen`, `inject` |
+| `lib/messaging` | Message broker (KafkaJS) | `publish`, `subscribe`, `ensureTopics` |
+| `lib/observability` | Logging (pino) | `logger` |
+| `lib/testing` | Test utilities (vitest) | `test`, `describe`, `it`, `expect`, `createTestDataSource` |
+| `lib/quality` | Linting, formatting, git hooks | `base()`, `boundaries()`, `setup.ts` |
 
 ---
 
@@ -296,7 +300,7 @@ subscribe('progressMilestoneReached',  handle(progressMilestoneReached));
 
 ### Consumer error handling
 
-Every message processed by `lib/consumer` is wrapped in a try/catch. An error thrown by the handler — whether a `NotFoundError`, a transient DB failure, or a validation error — never crashes the consumer. The Kafka `eachMessage` loop keeps running regardless.
+Every message processed by `lib/messaging` is wrapped in a try/catch. An error thrown by the handler — whether a `NotFoundError`, a transient DB failure, or a validation error — never crashes the consumer. The Kafka `eachMessage` loop keeps running regardless.
 
 ### Retry with exponential backoff
 
@@ -305,8 +309,6 @@ Before giving up, the consumer retries the handler up to **3 times** with expone
 ```
 attempt 1 → wait 500ms → attempt 2 → wait 1s → attempt 3 → wait 2s → give up
 ```
-
-This covers transient failures (momentary DB unavailability, network hiccup) without any manual intervention.
 
 ### Dead Letter Queue (DLQ)
 
@@ -320,16 +322,6 @@ If all retries are exhausted, the original message is published to the `student-
   "error": "DiagnosticTriggered not found for eventId: ...",
   "failedAt": "2024-01-01T00:00:00.000Z"
 }
-```
-
-The consumer moves on — no message blocks the pipeline, and nothing is silently lost.
-
-### Kafka client retry
-
-The Kafka client is configured with explicit retry settings to handle broker unavailability at connection time:
-
-```typescript
-retry: { initialRetryTime: 300, retries: 10 }
 ```
 
 ### Summary
@@ -348,38 +340,18 @@ retry: { initialRetryTime: 300, retries: 10 }
 
 ### Log pipeline
 
-Logs are emitted by the application as structured JSON (via `pino`) and flow through the following pipeline:
-
 ```
 app container (stdout)
        │
        ▼
-Promtail  ← scrapes Docker socket every 5s, labels logs with container name
+Promtail  ← scrapes Docker socket every 5s
        │
        ▼
 Loki  ← stores and indexes log streams
        │
        ▼
-Grafana  ← queries Loki via LogQL, renders results
+Grafana  ← queries Loki via LogQL
 ```
-
-> **Important:** Promtail scrapes Docker containers only. `yarn dev` runs outside Docker — its logs are not collected. Use `docker compose up -d` for full observability.
-
-### Structured log fields
-
-Every log line emitted by the application is a JSON object. The fields are:
-
-| Field | Source | Description |
-|---|---|---|
-| `level` | pino | Log level: `info`, `warn`, `error` |
-| `time` | pino | ISO timestamp |
-| `name` | pino | Logger name — matches the consumer group (`diagnosticTriggered`, etc.) or `student-journey` for the producer |
-| `msg` | pino | Human-readable message |
-| `topic` | consumer/producer | Kafka topic name (e.g. `DIAGNOSTIC_TRIGGERED`) |
-| `eventId` | consumer/producer | ID of the event being processed |
-| `cid` | consumer/producer | Correlation ID — traces a message across all saga steps |
-| `err` | consumer | Error object, present only on error logs |
-| `payload` | consumer | Original Kafka payload, present on DLQ error logs |
 
 ### Correlation ID (`cid`)
 
@@ -389,46 +361,52 @@ Each Kafka message carries a `cid` field that propagates through the entire saga
 a3f2b1c0:0  →  a3f2b1c0:1  →  a3f2b1c0:2  →  ...  →  a3f2b1c0:8
 ```
 
-The hop counter increments at every publish. A single `POST /journeys` that completes the full saga produces logs with `cid` values from `:0` through `:8` — one per step. Filtering by the UUID prefix in Grafana shows the entire lifecycle of one journey.
+Filtering by the UUID prefix in Grafana shows the entire lifecycle of one journey.
 
 ### Querying logs in Grafana
 
 Navigate to `http://localhost:4000` → **Explore** → datasource **Loki**.
 
-**All app logs**
 ```logql
-{container="student-journey-app-1"}
-```
-
-**Filter by keyword**
-```logql
-{container="student-journey-app-1"} |= "consumer: message received"
-```
-
-**Errors only**
-```logql
-{container="student-journey-app-1"} |= "ERROR"
-```
-
-**Parse JSON and filter by field**
-```logql
+{container="student-journey-app-1"} | json | cid =~ "a3f2b1c0:.*"
+{container="student-journey-app-1"} |= "sending to DLQ"
 {container="student-journey-app-1"} | json | topic = "DIAGNOSTIC_TRIGGERED"
 ```
 
-**Trace a full journey by correlation ID**
-```logql
-{container="student-journey-app-1"} | json | cid =~ "a3f2b1c0:.*"
+---
+
+## Quality
+
+Code quality is enforced at every stage of the development workflow.
+
+### Lint + Format
+
+```bash
+npm run lint       # prettier --check + eslint (fails build if broken)
+npm run lint-fix   # prettier --write + eslint --fix (auto-fixes formatting)
 ```
 
-**Dead Letter Queue — failed messages**
-```logql
-{container="student-journey-app-1"} |= "sending to DLQ"
+ESLint enforces:
+- **No framework imports in `src/`** — `typeorm`, `kafkajs`, `fastify`, `pino`, `vitest` are banned. All access goes through the corresponding `lib/*`.
+- **Layer boundaries** — a controller cannot import from another controller; logic cannot import from db; diplomat can only import from controllers and wire. Violations are compile-time errors.
+- **No plain function declarations in domain layers** — `function foo() {}`, `const foo = () => {}`, and `const foo = function() {}` are banned in `src/adapters`, `src/controllers`, `src/logic`, `src/model`, and `src/wire`. All functions must use `fn()` or `asyncFn()` from `lib/types`.
+
+### Git hooks
+
+Install once with:
+
+```bash
+npm run quality:setup
 ```
 
-**Consumer that failed to start**
-```logql
-{container="student-journey-app-1"} |= "consumer: failed to start"
-```
+After that, hooks run automatically:
+
+| Hook | Trigger | Command |
+|---|---|---|
+| `pre-commit` | `git commit` | `npm run test` |
+| `pre-push` | `git push` | `npm run build` |
+
+There is no `--no-verify` bypass documented here intentionally.
 
 ---
 
@@ -436,8 +414,7 @@ Navigate to `http://localhost:4000` → **Explore** → datasource **Loki**.
 
 ### Prerequisites
 
-- Node.js 22+
-- Yarn
+- Node.js 24+
 - Docker
 
 ### Start with Docker
@@ -451,18 +428,25 @@ docker compose up -d
 | Service | URL | Description |
 |---|---|---|
 | **API** | http://localhost:3000 | Main application |
-| **Kafka UI** | http://localhost:8080 | Kafka web interface — topics, messages, consumer groups |
-| **Grafana** | http://localhost:4000 | Observability dashboards — logs via Loki |
-| **PostgreSQL** | localhost:5432 | Database — user `postgres`, password `postgres`, db `student_journey` |
-
+| **Kafka UI** | http://localhost:8080 | Topics, messages, consumer groups |
+| **Grafana** | http://localhost:4000 | Logs via Loki |
+| **PostgreSQL** | localhost:5432 | user `postgres`, password `postgres`, db `student_journey` |
 
 ### Local Setup
 
 ```bash
-yarn install
-yarn dev          # development with hot reload
-yarn build        # compile to dist/
-yarn start        # run compiled build
+npm install
+npm run dev          # development with hot reload
+npm run build        # lint + compile to dist/
+npm start            # run compiled build
+```
+
+### Migrations
+
+```bash
+npm run migration:generate -- <name>   # generate a new migration
+npm run migration:run                  # apply pending migrations
+npm run migration:revert               # revert the last migration
 ```
 
 ### Endpoints
@@ -487,70 +471,52 @@ curl -s -X POST http://localhost:3000/journeys \
 ## Testing
 
 ```bash
-yarn unit          # unit tests only
-yarn integration   # integration tests only
-yarn test          # all tests
+npm run unit          # unit tests only
+npm run integration   # integration tests only
+npm run test          # all tests
+```
+
+Tests import exclusively from `lib/testing` — never from `vitest` directly:
+
+```typescript
+import { test, describe, it, expect, beforeAll, afterAll } from '../../lib/testing';
+
+test.mock('../../src/db/data-source', () => ({ AppDataSource: TestDataSource }));
+test.mock('../../lib/messaging/producer/index', () => ({
+  publish: test.fn(),
+}));
 ```
 
 ### Unit tests
 
 Cover every `logic/` and `adapters/` function in isolation. No mocks, no infrastructure.
 
-```
-tests/unit/
-├── event/             # buildEvent, toModel
-├── eventRecord/       # buildEventRecord
-├── journey/           # buildJourney, buildJourneyStepUpdate, buildJourneyStatusUpdate
-├── journeyInitiated/  # buildJourneyInitiated
-├── student/           # buildStudent
-├── diagnosticTriggered/adapters.test.ts
-├── diagnosticCompleted/adapters.test.ts
-├── analysisStarted/adapters.test.ts
-├── analysisFinished/adapters.test.ts
-├── curriculumGenerated/adapters.test.ts
-├── contentDispatched/adapters.test.ts
-├── studentEngagementReceived/adapters.test.ts
-├── progressMilestoneReached/adapters.test.ts
-└── journeyCompleted/adapters.test.ts
-```
-
 ### Integration tests
 
 Cover the full lifecycle end-to-end with no external dependencies:
-- Real HTTP injection via Fastify `inject` (no server needed)
-- SQLite in-memory database (no Postgres needed)
+- Real HTTP injection via Fastify `inject` (no running server needed)
+- SQLite in-memory database via `createTestDataSource` (no Postgres needed)
 - Kafka producer mocked — verifies topic and payload correctness
 
-**HTTP entry point:**
-```
-POST /journeys
-  → validate input
-  → insert Student, Journey, JourneyInitiated in DB
-  → publish('journeyInitiated', { journeyId, eventId })
-  → return Journey (201)
-```
-
-**One test file per saga step** — each verifies all four guarantees of its consumer:
+**One test file per saga step**, each verifying:
+1. The new event record is inserted with `id = previous.id`
+2. `journey.current_step` is advanced to the correct step
+3. The correct Kafka topic is published with the right payload
+4. A second identical call is idempotent — no duplicate record
 
 ```
 tests/integration/
 ├── journey.test.ts                    # POST /journeys HTTP flow
-├── journey-initiated.test.ts          # journeyStarted consumer
-├── diagnostic-triggered.test.ts       # diagnosticTriggered consumer
-├── diagnostic-completed.test.ts       # diagnosticCompleted consumer
-├── analysis-started.test.ts           # analysisStarted consumer
-├── analysis-finished.test.ts          # analysisFinished consumer
-├── curriculum-generated.test.ts       # curriculumGenerated consumer
-├── content-dispatched.test.ts         # contentDispatched consumer
+├── journey-initiated.test.ts
+├── diagnostic-triggered.test.ts
+├── diagnostic-completed.test.ts
+├── analysis-started.test.ts
+├── analysis-finished.test.ts
+├── curriculum-generated.test.ts
+├── content-dispatched.test.ts
 ├── student-engagement-received.test.ts
 └── progress-milestone-reached.test.ts
 ```
-
-Each integration test file verifies:
-1. The new event record is inserted with `id = previous.id`
-2. `journey.current_step` is advanced to the correct step
-3. The correct Kafka topic is published with the right payload
-4. A second identical call is idempotent — no duplicate record, publish is re-issued
 
 ---
 

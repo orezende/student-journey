@@ -1,20 +1,23 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import { Migration, sql, MigrationRunner } from '../../../lib/db';
 
-export class CreateProgressMilestoneReachedTable1777200070000 implements MigrationInterface {
+export class CreateProgressMilestoneReachedTable1777200070000 extends Migration {
   name = 'CreateProgressMilestoneReachedTable1777200070000';
 
-  public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`
+  async up(runner: MigrationRunner): Promise<void> {
+    await sql(
+      runner,
+      `
       CREATE TABLE "progress_milestone_reached" (
         "id" uuid NOT NULL,
         "journey_id" uuid NOT NULL,
         "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
         CONSTRAINT "PK_progress_milestone_reached" PRIMARY KEY ("id")
       )
-    `);
+    `,
+    );
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE "progress_milestone_reached"`);
+  async down(runner: MigrationRunner): Promise<void> {
+    await sql(runner, `DROP TABLE "progress_milestone_reached"`);
   }
 }

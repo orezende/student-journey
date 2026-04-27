@@ -1,0 +1,15 @@
+{
+  "name": "@student-journey/db",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "reflect-metadata": "^0.2.2",
+    "typeorm": "^0.3.28",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "better-sqlite3": "^12.9.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/pg": "^8.20.0"
+  }
+}

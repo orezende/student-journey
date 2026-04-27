@@ -1,17 +1,23 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { defineEntity, column, SchemaDefinition } from '../../../lib/db';
 
-@Entity('diagnostic_completed')
 export class DiagnosticCompletedDbWire {
-  @PrimaryGeneratedColumn('uuid')
   id!: string;
-
-  @Column({ name: 'journey_id', type: 'uuid' })
   journey_id!: string;
-
-  @CreateDateColumn({ name: 'created_at' })
   created_at!: Date;
 
   static parse(data: unknown): DiagnosticCompletedDbWire {
     return Object.assign(new DiagnosticCompletedDbWire(), data);
   }
 }
+
+export const DiagnosticCompletedSchema: SchemaDefinition<DiagnosticCompletedDbWire> = defineEntity(
+  DiagnosticCompletedDbWire,
+  {
+    tableName: 'diagnostic_completed',
+    columns: {
+      id: column.primaryUuid(),
+      journey_id: column.uuid(),
+      created_at: column.createdAt(),
+    },
+  },
+);

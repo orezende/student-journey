@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from '../../../lib/testing';
 import { fromDbWire, toDbWire } from '../../../src/adapters/curriculum-generated';
 import { CurriculumGeneratedDbWire } from '../../../src/db/wire/curriculum-generated';
 

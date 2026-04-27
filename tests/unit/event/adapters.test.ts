@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from '../../../lib/testing';
 import { toModel } from '../../../src/adapters/event';
 
 const journeyId = '11111111-1111-1111-1111-111111111111';

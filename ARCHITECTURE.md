@@ -1,6 +1,6 @@
 # Diplomat Architecture — Developer Reference
 
-This document is the authoritative reference for the Diplomat Architecture as implemented in this project. It covers layer responsibilities, data flow, and step-by-step guides for extending the codebase.
+This document is the authoritative reference for the Diplomat Architecture as implemented in this project. It covers layer responsibilities, data flow, step-by-step guides for extending the codebase, and the quality enforcement system.
 
 ---
 
@@ -19,19 +19,19 @@ The codebase is split into two top-level blocks:
 
 ### `lib/` — Technical Infrastructure
 
-Encapsulates all frameworks and communication technologies. Nothing in `src/` imports Fastify, Kafka, or any external library directly.
+Each `lib/*` directory is a standalone npm workspace package with its own `package.json`. No external framework is ever imported in `src/` — ESLint enforces this at compile time.
 
 | Module | Encapsulates | Exposes |
 |---|---|---|
-| `lib/http-server` | Fastify | `get`, `post`, `listen`, `inject` |
-| `lib/consumer` | KafkaJS | `subscribe(name, handler)` |
-| `lib/producer` | KafkaJS | `publish(name, message)`, `publishRaw(topic, message)` |
-| `lib/types/schema` | — | `createSchema`, `field.*` |
-| `lib/types/fn` | — | `fn`, `asyncFn` |
-| `lib/types/uuid` | — | `toUUID`, `asUUID` |
-| `lib/errors` | — | `NotFoundError`, `ConflictError`, `ValidationError` |
-| `lib/logger` | pino | `logger` |
-| `lib/kafka` | KafkaJS `Kafka` | `kafka` client instance |
+| `lib/db` | TypeORM | `AppDataSource`, `createTestDataSource`, migration CLI |
+| `lib/http` | Fastify | `get`, `post`, `listen`, `inject` |
+| `lib/messaging` | KafkaJS | `publish`, `subscribe`, `connect`, `disconnect`, `ensureTopics` |
+| `lib/observability` | pino | `logger` |
+| `lib/testing` | vitest | `test`, `describe`, `it`, `expect`, `beforeAll`, `afterAll`, `beforeEach`, `afterEach`, `createTestDataSource` |
+| `lib/types` | — | `createSchema`, `field.*`, `fn`, `asyncFn`, `UUID`, error classes |
+| `lib/quality` | ESLint, Prettier, git hooks | `base()`, `boundaries()`, hook setup |
+
+`lib/quality` is tooling-only — it is excluded from TypeScript compilation (`tsconfig.json`) because its ESLint dependencies require a different module resolution than the application. It is loaded at lint time by `jiti`.
 
 **Rule:** swapping Fastify for another HTTP framework, or Kafka for another broker, means changing only files inside `lib/` — zero changes in `src/`.
 
@@ -135,6 +135,8 @@ Executes queries and persists data. Always receives and returns `model` — the 
 - `db/data-source.ts` — TypeORM DataSource configuration
 - `db/<entity>.ts` — query functions (`findById`, `insert`, `updateStep`, etc.)
 
+The `const repo = () => AppDataSource.getRepository(X)` lazy getter pattern is standard here and is intentionally excluded from the function declaration lint rule (infrastructure code, not domain logic).
+
 ---
 
 ### `diplomat/` — Bridge Between Lib and Application
@@ -155,6 +157,8 @@ post('/journeys', async (body) => {
 subscribe('journeyInitiated', handle(journeyStarted));
 ```
 
+Bootstrap and wiring functions in `diplomat/` (`setupConsumers`, `setupRoutes`) are excluded from the function declaration lint rule — they are initialization code, not domain logic.
+
 ---
 
 ## Data Flow
@@ -163,19 +167,19 @@ subscribe('journeyInitiated', handle(journeyStarted));
 
 ```
 HTTP request
-  → lib/http-server       (Fastify — receives and routes)
+  → lib/http              (Fastify — receives and routes)
   → diplomat/http-server  (receives wire/in body)
   → adapters.fromWireIn   (wire/in → model)
   → controllers           (model → model)
   → adapters.toWireOut    (model → wire/out)
-  → lib/http-server       (Fastify — responds)
+  → lib/http              (Fastify — responds)
 ```
 
 ### Kafka consumer
 
 ```
 Kafka message
-  → lib/consumer          (KafkaJS — receives, retries, DLQ)
+  → lib/messaging         (KafkaJS — receives, retries, DLQ)
   → diplomat/consumer     (receives wire/in)
   → adapters.toModel      (wire/in → model)
   → controllers           (model → void)
@@ -185,7 +189,7 @@ Kafka message
 
 ```
 controllers
-  → lib/producer.publish  (model → topic)
+  → lib/messaging.publish (model → topic)
   → KafkaJS               (publishes message)
 ```
 
@@ -199,6 +203,111 @@ controllers
   → adapters.fromDbWire   (db/wire → model)
   → controllers           (receives model back)
 ```
+
+---
+
+## Quality System
+
+### Layer boundaries (ESLint)
+
+Configured in `eslint.config.ts` using `boundaries()` from `lib/quality`. The default policy is `disallow` — any import not explicitly listed is a compile-time error.
+
+```
+diplomat    → can import from: controllers, wire
+controllers → can import from: logic, model
+logic       → can import from: model
+adapters    → can import from: model, db-wire, wire
+db          → can import from: db-wire, model, adapters
+db-wire     → cannot import from any src layer
+model       → cannot import from any src layer
+wire        → cannot import from any src layer
+```
+
+### Framework import restrictions (ESLint)
+
+Direct imports of `typeorm`, `kafkajs`, `fastify`, `pino`, and `vitest` anywhere inside `src/` are a lint error. All access goes through the corresponding `lib/*` package.
+
+### Function declaration rule (ESLint)
+
+In domain layers (`src/adapters`, `src/controllers`, `src/logic`, `src/model`, `src/wire`), the following patterns are banned:
+
+```typescript
+// banned
+function foo() {}
+const foo = () => {}
+const foo = function() {}
+
+// required
+export const foo = fn(Input, Output, (input) => { ... });
+export const foo = asyncFn(Input, Output, async (input) => { ... });
+```
+
+This guarantees that every domain function is type-validated at its boundaries. Infrastructure layers (`src/db`, `src/diplomat`) are exempt — they contain wiring and repository patterns where plain functions are appropriate.
+
+### Prettier (auto-format)
+
+```bash
+npm run lint-fix   # formats src/ and fixes ESLint violations
+```
+
+Config: 2-space indent, 100 char line width, single quotes, semicolons, trailing commas.
+
+### Git hooks
+
+```bash
+npm run quality:setup   # install hooks into .git/hooks/
+```
+
+| Hook | Runs |
+|---|---|
+| `pre-commit` | `npm run test` |
+| `pre-push` | `npm run build` (lint + tsc) |
+
+### Build gate
+
+`npm run build` runs `npm run lint` first. If Prettier or ESLint finds violations, the TypeScript compilation never runs.
+
+---
+
+## Testing Architecture
+
+### lib/testing
+
+Tests import from `lib/testing` only — never from `vitest` directly:
+
+```typescript
+import { test, describe, it, expect, beforeAll, afterAll } from '../../lib/testing';
+```
+
+The `test` object maps to `vi.*`:
+
+```typescript
+test.fn()         // vi.fn()
+test.mock(...)    // vi.mock(...)  — correctly hoisted by vitest
+test.spy(...)     // vi.spyOn(...)
+test.clearAll()   // vi.clearAllMocks()
+```
+
+`test.mock` hoisting works because:
+1. `globals: true` in `vitest.config.ts` makes `vi` a global — no import needed
+2. A `testAliasPlugin` (Vite transform, `enforce: 'pre'`) rewrites `test.mock(` → `vi.mock(` before vitest processes the file, so the static hoisting analysis finds the expected pattern
+
+The plugin is defined inside each project config (unit, integration), not at the root — vitest isolates each project's Vite instance.
+
+### createTestDataSource
+
+Integration tests use an in-memory SQLite database, never Postgres:
+
+```typescript
+// tests/integration/helpers/data-source.ts
+import { createTestDataSource } from '../../../lib/testing';
+export const TestDataSource = createTestDataSource([...schemas]);
+
+// in each test file
+test.mock('../../src/db/data-source', () => ({ AppDataSource: TestDataSource }));
+```
+
+`createTestDataSource` creates a TypeORM DataSource with `better-sqlite3`, `database: ':memory:'`, and `synchronize: true` — no migrations needed.
 
 ---
 
@@ -268,8 +377,8 @@ export class MyEntityDbWire {
 
 #### 4. Migration
 
-```
-src/db/migrations/<timestamp>_create_<entity>.ts
+```bash
+npm run migration:generate -- create_<entity>
 ```
 
 #### 5. Adapters

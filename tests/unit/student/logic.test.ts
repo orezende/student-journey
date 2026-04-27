@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from '../../../lib/testing';
 import { buildStudent } from '../../../src/logic/student';
 
 describe('buildStudent', () => {

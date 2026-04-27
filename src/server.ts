@@ -1,7 +1,7 @@
-import 'reflect-metadata';
 import { AppDataSource } from './db/data-source';
-import { listen, close } from '../lib/http-server/index';
-import { connect, disconnect } from '../lib/producer/index';
+import { listen, close } from '../lib/http/server/index';
+import { connect, disconnect } from '../lib/messaging/producer/index';
+import { ensureTopics } from '../lib/messaging/admin';
 import { buildApp } from './app';
 import { setupConsumers } from './diplomat/consumer/index';
 
@@ -20,6 +20,8 @@ process.on('SIGINT', shutdown);
 
 AppDataSource.initialize()
   .then(async () => {
+    await AppDataSource.runMigrations();
+    await ensureTopics();
     await connect();
     setupConsumers();
     buildApp();

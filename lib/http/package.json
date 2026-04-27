@@ -1,0 +1,8 @@
+{
+  "name": "@student-journey/http",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "fastify": "^5.8.5"
+  }
+}

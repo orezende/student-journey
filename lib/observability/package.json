@@ -1,0 +1,8 @@
+{
+  "name": "@student-journey/observability",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "pino": "^10.3.1"
+  }
+}

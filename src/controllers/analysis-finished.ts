@@ -1,6 +1,6 @@
 import { asyncFn } from '../../lib/types/fn';
-import { NotFoundError } from '../../lib/errors/index';
-import { publish } from '../../lib/producer/index';
+import { NotFoundError } from '../../lib/types/errors/index';
+import { publish } from '../../lib/messaging/producer/index';
 import { Event } from '../model/event';
 import { buildEvent } from '../logic/event';
 import { buildEventRecord } from '../logic/event-record';
@@ -15,7 +15,8 @@ const sideEffect = asyncFn(Event, async (event) => {
 
 export const analysisFinished = asyncFn(Event, async (event) => {
   const previous = await analysisFinishedDb.findById(event.eventId);
-  if (!previous) throw new NotFoundError('AnalysisFinished not found for eventId: ' + event.eventId);
+  if (!previous)
+    throw new NotFoundError('AnalysisFinished not found for eventId: ' + event.eventId);
 
   const existing = await curriculumGeneratedDb.findById(event.eventId);
   if (existing) {
@@ -24,6 +25,8 @@ export const analysisFinished = asyncFn(Event, async (event) => {
   }
 
   const current = await curriculumGeneratedDb.insert(buildEventRecord(event));
-  await journeyDb.updateStep(buildJourneyStepUpdate({ id: previous.journeyId, currentStep: 'CURRICULUM_GENERATED' }));
+  await journeyDb.updateStep(
+    buildJourneyStepUpdate({ id: previous.journeyId, currentStep: 'CURRICULUM_GENERATED' }),
+  );
   await sideEffect(buildEvent({ journeyId: current.journeyId, eventId: current.id }));
 });

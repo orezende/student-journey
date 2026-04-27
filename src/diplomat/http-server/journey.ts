@@ -1,4 +1,4 @@
-import { post } from '../../../lib/http-server/index';
+import { post } from '../../../lib/http/server/index';
 import { fromWireIn, toWireOut } from '../../adapters/journey';
 import { startJourney } from '../../controllers/journey';
 

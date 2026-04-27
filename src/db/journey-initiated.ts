@@ -12,7 +12,9 @@ export const insert = asyncFn(JourneyInitiatedInput, JourneyInitiated, async (in
   return fromDbWire(row);
 });
 
-export async function findById(id: UUID): Promise<ReturnType<typeof JourneyInitiated.parse> | null> {
+export async function findById(
+  id: UUID,
+): Promise<ReturnType<typeof JourneyInitiated.parse> | null> {
   const row = await repo().findOne({ where: { id } });
   return row ? fromDbWire(row) : null;
 }

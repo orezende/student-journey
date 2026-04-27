@@ -1,16 +1,16 @@
-import { vi, describe, it, expect, beforeAll, beforeEach, afterAll, afterEach } from 'vitest';
+import { test, describe, it, expect, beforeAll, beforeEach, afterAll, afterEach } from '../../lib/testing';
 import { TestDataSource } from './helpers/data-source';
 
-vi.mock('../../src/db/data-source', () => ({ AppDataSource: TestDataSource }));
-vi.mock('../../lib/producer/index', () => ({
-  publish: vi.fn(),
-  connect: vi.fn(),
-  disconnect: vi.fn(),
+test.mock('../../src/db/data-source', () => ({ AppDataSource: TestDataSource }));
+test.mock('../../lib/messaging/producer/index', () => ({
+  publish: test.fn(),
+  connect: test.fn(),
+  disconnect: test.fn(),
 }));
 
 import { buildApp } from '../../src/app';
-import { inject } from '../../lib/http-server/index';
-import { publish } from '../../lib/producer/index';
+import { inject } from '../../lib/http/server/index';
+import { publish } from '../../lib/messaging/producer/index';
 import { AppDataSource } from '../../src/db/data-source';
 import { StudentDbWire } from '../../src/db/wire/student';
 import { JourneyDbWire } from '../../src/db/wire/journey';
@@ -28,7 +28,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  test.clearAll();
 });
 
 afterEach(async () => {
@@ -81,7 +81,7 @@ describe('POST /journeys', () => {
     await inject({ method: 'POST', url: '/journeys', body: validBody });
 
     expect(publish).toHaveBeenCalledOnce();
-    const [topic, payload] = (publish as ReturnType<typeof vi.fn>).mock.calls[0];
+    const [topic, payload] = (publish as ReturnType<typeof test.fn>).mock.calls[0];
     expect(topic).toBe('journeyInitiated');
     expect(payload.journeyId).toBeDefined();
     expect(payload.eventId).toBeDefined();

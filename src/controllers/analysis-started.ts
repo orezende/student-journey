@@ -1,6 +1,6 @@
 import { asyncFn } from '../../lib/types/fn';
-import { NotFoundError } from '../../lib/errors/index';
-import { publish } from '../../lib/producer/index';
+import { NotFoundError } from '../../lib/types/errors/index';
+import { publish } from '../../lib/messaging/producer/index';
 import { Event } from '../model/event';
 import { buildEvent } from '../logic/event';
 import { buildEventRecord } from '../logic/event-record';
@@ -24,6 +24,8 @@ export const analysisStarted = asyncFn(Event, async (event) => {
   }
 
   const current = await analysisFinishedDb.insert(buildEventRecord(event));
-  await journeyDb.updateStep(buildJourneyStepUpdate({ id: previous.journeyId, currentStep: 'ANALYSIS_FINISHED' }));
+  await journeyDb.updateStep(
+    buildJourneyStepUpdate({ id: previous.journeyId, currentStep: 'ANALYSIS_FINISHED' }),
+  );
   await sideEffect(buildEvent({ journeyId: current.journeyId, eventId: current.id }));
 });

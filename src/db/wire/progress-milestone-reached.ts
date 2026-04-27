@@ -1,17 +1,21 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { defineEntity, column, SchemaDefinition } from '../../../lib/db';
 
-@Entity('progress_milestone_reached')
 export class ProgressMilestoneReachedDbWire {
-  @PrimaryGeneratedColumn('uuid')
   id!: string;
-
-  @Column({ name: 'journey_id', type: 'uuid' })
   journey_id!: string;
-
-  @CreateDateColumn({ name: 'created_at' })
   created_at!: Date;
 
   static parse(data: unknown): ProgressMilestoneReachedDbWire {
     return Object.assign(new ProgressMilestoneReachedDbWire(), data);
   }
 }
+
+export const ProgressMilestoneReachedSchema: SchemaDefinition<ProgressMilestoneReachedDbWire> =
+  defineEntity(ProgressMilestoneReachedDbWire, {
+    tableName: 'progress_milestone_reached',
+    columns: {
+      id: column.primaryUuid(),
+      journey_id: column.uuid(),
+      created_at: column.createdAt(),
+    },
+  });

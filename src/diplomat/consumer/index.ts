@@ -1,4 +1,4 @@
-import { subscribe } from '../../../lib/consumer/index';
+import { subscribe } from '../../../lib/messaging/consumer/index';
 import { asyncFn } from '../../../lib/types/fn';
 import { EventWireIn } from '../../wire/in/event';
 import { toModel } from '../../adapters/event';

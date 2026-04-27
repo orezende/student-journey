@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from '../../../lib/testing';
 import { fromWireIn, toWireOut, fromDbWire, toDbWire } from '../../../src/adapters/journey';
 import { JourneyDbWire } from '../../../src/db/wire/journey';
 
